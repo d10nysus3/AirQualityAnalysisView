@@ -94,10 +94,10 @@ const levelMappingTable = [
         baseLevel: 300,
         aqiLevel: "严"
     },
-]
+].reverse()
 
 export function calculateAqiLevel(aqi) {
-    for (const item of levelMappingTable.reverse()) {
+    for (const item of levelMappingTable) {
         if (aqi >= item.baseLevel) {
             return item.aqiLevel
         }
