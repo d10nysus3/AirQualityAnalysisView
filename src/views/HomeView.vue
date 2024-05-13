@@ -1,8 +1,8 @@
 <template>
   <div
-    style="background-color: black; height: 100vh; width: 100%;"
+    style="height: 100vh; width: 100%;"
   >
-    <div style=" display: flex">
+    <div style="display: flex">
       <div style="width: 35%; margin: 10px 1%">
         <div class="lineChart" style="position: relative;">
           <div v-loading="!!LineDataList && lineDataIsLoading" id="line" style="width: 100%; height: 200px;position:absolute"></div>
@@ -16,14 +16,17 @@
           </div>
         </div>
         <div style="margin: 10px 0"></div>
-        <div class="lineChart" style="display: flex">
-          <div style="margin-top: 10%; margin-left: 10%">
-            <div class="circle" style="--before-bg-color: conic-gradient(#061235, #061235, #089065, #16b663);"></div>
+        <div class="lineChart" style="display: flex;white-space: pre-wrap;">
+          <div style="margin-left: 10%;white-space: pre-wrap; display: flex; justify-content: center; align-items: center; position: relative;">
+            <div style="position: absolute; color: white; z-index: 10;white-space: pre-wrap;">  风向<br>{{ this.windDirection }}</div>
+            <div class="circle" style="--before-bg-color: conic-gradient(#061235, #061235, #089065, #16b663)"></div>
           </div>
-          <div style="margin-top: 10%; margin-left: 10%">
+          <div style="margin-left: 10%;white-space: pre-wrap; display: flex; justify-content: center; align-items: center; position: relative;">
+            <div style="position: absolute; color: white; z-index: 10;">风速<br>{{ this.windSpeed }}</div>
             <div class="circle" style="--before-bg-color: conic-gradient(#061235, #061235, #dfe829, #e8b80a);"></div>
           </div>
-          <div style="margin-top: 10%; margin-left: 10%">
+          <div style=" margin-left: 10%;white-space: pre-wrap; display: flex; justify-content: center; align-items: center; position: relative;">
+            <div style="position: absolute; color: white; z-index: 10;">&nbsp;&nbsp;{{ this.weather }}<br>{{ this.temperature }}</div>
             <div class="circle" style="--before-bg-color: conic-gradient(#061235, #061235, #159ace, #0635d1);"></div>
           </div>
         </div>
@@ -41,37 +44,40 @@
         >
       </div>
       <div  class="proportionChart" style="position: relative;">
-        <div id="proportion" style="width:100%;height:300px;position: absolute;"></div>
-        <div style="margin-left: 35%;margin-top: -80%">
+        <div id="proportion" style="width:105%;height:300px;position: absolute;margin-left: -5%;"></div>
+        <div style="margin-left: 40%;margin-top: -80%">
+            <div style="color: white;">当前城市:  {{ this.currentcity }}</div>
             <el-date-picker
               v-model="date"
               type="date"
               style="width: 150px;">
             </el-date-picker>
         </div>
-        <div style="margin-left: -25%;margin-top: 70%">
-          <el-popover
-            placement="bottom"
-            title="标题"
-            width="200"
-            trigger="click"
-            content="这是一段内容,这是一段内容,这是一段内容,这是一段内容。">
-            <el-button slot="reference" style="background-color: #652fc9;border: #159ace;color: white;">成因分析</el-button>
-          </el-popover>
+        <div style="margin-left: -30%;margin-top: 70%">
+          <el-button 
+            slot="footer" 
+            class="dialog-footer" 
+            style="background-color: #652fc9;border: #159ace;color: white;"
+            @click="getCause"
+            >
+            成因分析
+          </el-button>
         </div>
       </div>
     </div>
 
-    <div style=" display: flex">
+    <div style="display: flex">
       <div style="width: 35%; margin: 10px 1% ;">
-        <div class="lineChart" style="height: 320px;"> 
+        <div class="lineChart" style="height: 320px; overflow: hidden;"> 
           <div style="display: flex;justify-content: center; align-items: flex-start;color: white;font-size: 25px;margin-top: 20px;"> 城市AQI排行榜</div>
           <div style="display: flex;justify-content: center; align-items: flex-start;"> 
             <el-table
-              :data="tableData"
-              style="width: 100%;background-color: #061235;display: inline-block;margin-top: 10px;padding: 0;" 
+              :data="rankData"
+              style="width: 100%;background-color: #061235c7;display: inline-block;margin-top: 10px;padding: 0;" 
               :header-cell-style="{background:'#061235', color:'white',textAlign: 'center'}"
-              :cell-style="{background:'#061235', color:'white',textAlign: 'center'}">
+              :cell-style="{background:'#061235c7', color:'white',textAlign: 'center'}"
+              max-height="300px"
+              >
               <el-table-column
                 prop="rank"
                 label="排名"
@@ -108,6 +114,17 @@
         </div>
       </div>
     </div>
+    <el-dialog
+      title="成因分析"
+      :visible.sync="centerDialogVisible"
+      width="50%"
+      center>
+      <div v-loading="chatDateIsLoading" element-loading-text="思考中……" style="width: 100%; min-height: 120px;">
+        <div v-for="subcontent in this.analysisContent.split('\n')" :key="subcontent">
+          &nbsp;&nbsp;&nbsp;&nbsp;{{ subcontent }}
+        </div>
+      </div>
+    </el-dialog>
   </div>
 
 </template>;
@@ -117,6 +134,7 @@ import * as echarts from "echarts";
 import {baseServer} from "../js/link";
 import china from "../js/china.json";
 import pinyin from "pinyin";
+import {calculateAqiLevel} from "../js/aqi";
 echarts.registerMap("china", china);
 export default {
   data() {
@@ -124,6 +142,8 @@ export default {
       percentage: 10,
       year:new Date(),
       date:new Date(),
+      centerDialogVisible: false,
+      isExecuting: false,
       colors: [
         { color: "#f56c6c", percentage: 20 },
         { color: "#e6a23c", percentage: 40 },
@@ -136,35 +156,24 @@ export default {
       histcharts:"",
       LineDataList: [],
       lineDataIsLoading: false,
+      chatDateIsLoading:false,
+      windDirection: "",
+      windSpeed:"",
+      weather:"",
+      temperature:'',
+      mintemperature:[],
+      maxtemperature:[],
+      CO:'', 
+      SO2:'',
+      NO2:'',
+      PM2_5:'',
+      PM10:'',
+      O3:'',
+      analysisContent: "",
+      currentcity:'',
       mapName: "china",
-      MapDataList: [
-        {
-          name: "黑龙江省",
-          value: 10,
-          perf: "99%",
-        },
-        {
-          name: "太原市",
-          value: 50,
-          perf: "99%",
-        },
-        {
-          name: "长沙市",
-          value: 23,
-          perf: "70%",
-        },
-        {
-          name: "云南省",
-          value: 68,
-          perf: "70%",
-        },
-        {
-          name: "安徽省",
-          value: 66,
-          perf: "60%",
-        },
-      ],
-      tableData: [{
+      MapDataList: [],
+      rankData: [{
         rank:1,
         province:'山东',
         city:'济南',
@@ -193,14 +202,9 @@ export default {
   },
 
   mounted() {
+    this.getRank();
+    this.getCityDate();
     this.drawLine();
-    this.setMapData();
-    this.$nextTick(() => {
-      // if (this.chinachart == null) {
-      this.drawLine();
-      this.setMapData();
-      // }
-    });
     this.drawProportion();
     this.drawHistogram();
   },
@@ -226,6 +230,68 @@ export default {
           this.lineDataIsLoading = false;
         })
     },
+    getNowWeather(){
+      const city = this.mapName.slice(0, -1);
+      baseServer
+      .post("current_weather/", {city})
+        .then((response) => {
+          const data = response.data;
+          this.windDirection = data.result.realtime.wind.direction;
+          this.windSpeed = data.result.realtime.wind.speed;
+          this.weather = this.parseWeatherName(data.result.realtime.skycon);
+          this.temperature = Math.round(data.result.realtime.temperature*10)/10+"°C";
+          this.mintemperature = data.result.daily.temperature.map(e=>e.min);
+          this.maxtemperature = data.result.daily.temperature.map(e=>e.max);
+          this.drawHistogram();
+        })
+        .catch((e) => {
+          console.error("Error:", e);
+        })
+    },
+    parseWeatherName(code){
+        switch (code) {
+            case 'CLEAR_DAY':
+            case 'CLEAR_NIGHT':
+                return '晴';
+            case 'PARTLY_CLOUDY_DAY':
+            case 'PARTLY_CLOUDY_NIGHT':
+                return '多云';
+            case 'CLOUDY':
+                return '阴';
+            case 'LIGHT_HAZE':
+                return '轻度雾霾';
+            case 'MODERATE_HAZE':
+                return '中度雾霾';
+            case 'HEAVY_HAZE':
+                return '重度雾霾';
+            case 'LIGHT_RAIN':
+                return '小雨';
+            case 'MODERATE_RAIN':
+                return '中雨';
+            case 'HEAVY_RAIN':
+                return '大雨';
+            case 'STORM_RAIN':
+                return '暴雨';
+            case 'FOG':
+                return '雾';
+            case 'LIGHT_SNOW':
+                return '小雪';
+            case 'MODERATE_SNOW':
+                return '中雪';
+            case 'HEAVY_SNOW':
+                return '大雪';
+            case 'STORM_SNOW':
+                return '暴雪';
+            case 'DUST':
+                return '浮尘';
+            case 'SAND':
+                return '沙尘';
+            case 'WIND':
+                return '大风';
+            default:
+                return '未知天气';
+        }
+    },
     getComponentdate(){
       const city_name = this.mapName.slice(0, -1);
       const date = this.date;
@@ -233,7 +299,89 @@ export default {
         .post("air_quality/", {date, city_name})
         .then((response) => {
           const data = response.data;
-          this.LineDataList = data.map(e => parseInt(e.average_aqi.value))
+          this.CO = data.data.co;
+          this.NO2 = data.data.no2;
+          this.SO2 = data.data.so2;
+          this.O3 = data.data.o3;
+          this.PM2_5 = data.data.pm2_5;
+          this.PM10 = data.data.pm10;
+          this.drawProportion();
+        })
+        .catch((e) => {
+          console.error("Error:", e);
+        });
+    },
+    getCityDate(){
+      baseServer
+        .get("get_city")
+        .then((response) => {
+          const data = response.data;
+          this.MapDataList = data.map((e)=>{
+            return {
+              name: e.data.cityname+'市',
+              value: e.data.aqi
+            }
+          });
+          console.log(this.MapDataList)
+          this.setMapData();
+        })
+        .catch((e) => {
+          console.error("Error:", e);
+        });
+      baseServer
+        .get("get_province")
+        .then((response) => {
+          const data = response.data;
+          console.log(data)
+          data.map((e)=>{
+              return {
+                name: e.province,
+                value: Math.round(e.aqi*10)/10
+              }
+            }
+          ).forEach(e => {
+            this.MapDataList.push(e)
+          });
+          console.log(this.MapDataList)
+          this.setMapData();
+        })
+        .catch((e) => {
+          console.error("Error:", e);
+        });
+    },
+    getCause(){
+      this.centerDialogVisible = true;
+      const city = this.mapName.slice(0, -1);
+      this.chatDateIsLoading = true;
+      baseServer
+        .post("gpt_analysis/", {city})
+        .then((response) => {
+          const data = response.data;
+          this.analysisContent = data.answer;
+        })
+        .catch((e) => {
+          console.error("Error:", e);
+        })
+        .finally(() => {
+          this.chatDateIsLoading = false;
+        });
+    },
+    getRank(){
+      baseServer
+      .get("rank")
+        .then((response) => {
+          const data = response.data;
+          console.log(data);
+          this.rankData = data.map((e)=>{
+            return {
+              rank: e.rank,
+              province:e.province,
+              city: e.cityname,
+              AQI: e.aqi,
+              grade: calculateAqiLevel(e.aqi)
+            }
+          });
+          console.log(this.rankData)
         })
         .catch((e) => {
           console.error("Error:", e);
@@ -246,7 +394,7 @@ export default {
         title: {
           left: "40%",
           top: "5%",
-          text: "最近一周空气质量", // 自定义
+          text: "该年空气AQI趋势", // 自定义
           textStyle: {
             color: "#ffffff",
           },
@@ -262,7 +410,7 @@ export default {
           align: "right",
           left: "3%",
           top: "15%",
-          data: ["近一周"], // 自定义
+          data: ["近一年"], // 自定义
           textStyle: {
             color: "#ffffff",
           },
@@ -309,7 +457,7 @@ export default {
         // 设置数据
         series: [
           {
-            name: "近一周",
+            name: "近一年",
             type: "line",
             stack: "总量",
             data: this.LineDataList,
@@ -354,17 +502,17 @@ export default {
           // 鼠标移到图里面的浮动提示框
           formatter(params) {
             // params.data 就是series配置项中的data数据遍历
-            let localValue, perf;
+            let localValue;
             if (params.data) {
               localValue = params.data.value;
-              perf = params.data.perf;
             } else {
               // 为了防止没有定义数据的时候报错写的
               localValue = 0;
-              perf = 0;
+              return;
             }
+  
             let htmlStr = `<div style='font-size:18px;'> ${params.name}</div>
-                              <p style='text-align:left;margin-top:2px;'>项目数量：${localValue}<br/>空气质量：${perf}<br/></p>`;
+                              <p style='text-align:left;margin-top:2px;'>AQI：${localValue}</p>`;
             return htmlStr;
           },
           backgroundColor: "#4682B4", //提示标签背景颜色
@@ -437,17 +585,20 @@ export default {
       };
       this.chinachart.setOption(this.chartOption);
       this.chinachart.on("click", (e) => {
+        
         this.mapName = e.name;
         if (e.componentSubType == "map") {
           this.getDownData(e.name);
+          console.log(this.mapName);
+          console.log(this.MapDataList);
           if (this.mapName[this.mapName.length - 1] == "市" )
           {
             this.getAQIdate();
+            this.getComponentdate();
+            this.getNowWeather();
+            console.log(this.analysisContent);
+            this.currentcity = this.mapName;
           }
-          console.log(this.mapName);
-          console.log(pinyin(this.mapName.slice(0, -1),{style:"normal"}).map(function (item) {
-            return item.join('');
-          }).join(''))
         }
       });
     },
@@ -553,7 +704,8 @@ export default {
         },
         legend: {//图例
           show: true,
-          left:"80%",
+          left:"83%",
+          top:"50%",
           orient: 'vertical',
           x: 'right',
           data: ['CO', 'SO₂','NO₂','PM2.5','PM10','O₃'],  //显示的百分比
@@ -577,6 +729,7 @@ export default {
               fontSize:"12"
           }
         },
+        
         series: [{
           name:'',
           type: 'pie',
@@ -607,12 +760,12 @@ export default {
             }
           },
           data: [
-            {value: 0.7, name: "CO"},
-            {value: 0.3, name: 'SO₂'},
-            {value: 0.3, name: 'NO₂'},
-            {value: 0.3, name: 'PM2.5'},
-            {value: 0.3, name: 'PM10'},
-            {value: 0.3, name: 'O₃'},
+            {value: this.CO, name: "CO"},
+            {value: this.SO2, name: 'SO₂'},
+            {value: this.NO2, name: 'NO₂'},
+            {value: this.PM2_5, name: 'PM2.5'},
+            {value: this.PM10, name: 'PM10'},
+            {value: this.O3, name: 'O₃'},
           ]
          }],
         color: ['rgb(40, 236, 236)','rgb(231, 207, 69)','rgb(255,182,193)','rgb(220,20,60)','rgb(34,139,34)','rgb(160,82,45)'] 
@@ -622,7 +775,7 @@ export default {
     drawHistogram(){
       this.histcharts = echarts.init(document.getElementById('histogram')); 
       var histoption;
-      let dataAxis = ['点', '击', '柱', '子', '或', '者', '两', '指', '在', '触', '屏', '上', '滑', '动', '能', '够', '自', '动', '缩', '放'];
+      let dataAxis = ['1','2','3','4','5','6','7','8','9','10','11','12','13','14'];
       let data = [220, 182, 191, 234, 290, 330, 310, 123, 442, 321, 90, 149, 210, 122, 133, 334, 198, 123, 125, 220];
       let yMax = 500;
       let dataShadow = [];
@@ -631,69 +784,82 @@ export default {
       }
       histoption = {
         title: {
-          text: '特性示例：渐变色 阴影 点击缩放',
-          textStyle:{
-            color:'#ffffff',
-            align:'center'
+          text: '未来14天温差情况',
+          left:"40%",
+          textStyle: {
+            color: '#ffffff',
+            fontSize:'25px'
           }
         },
-        xAxis: {
-          data: dataAxis,
-          axisLabel: {
-            inside: true,
-            color: '#fff'
-          },
-          axisTick: {
-            show: false
-          },
-          axisLine: {
-            show: false
-          },
-          z: 10
+        tooltip: {
+          trigger: 'axis'
         },
-        yAxis: {
-          axisLine: {
-            show: false
-          },
-          axisTick: {
-            show: false
-          },
-          axisLabel: {
-            color: '#999'
+        legend: {
+          data: ['最低温', '最高温']
+        },
+        toolbox: {
+          show: true,
+          feature: {
+            dataView: { show: true, readOnly: false },
+            magicType: { show: true, type: ['line', 'bar'] },
+            restore: { show: true },
+            saveAsImage: { show: true }
           }
         },
-        dataZoom: [
+        calculable: true,
+        xAxis: [
           {
-            type: 'inside'
+            type: 'category',
+            data: dataAxis
+          }
+        ],
+        yAxis: [
+          {
+            type: 'value'
           }
         ],
         series: [
           {
+            name: '最低温',
             type: 'bar',
-            showBackground: true,
-            itemStyle: {
-              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: '#83bff6' },
-                { offset: 0.5, color: '#188df0' },
-                { offset: 1, color: '#188df0' }
-              ])
+            data: this.mintemperature,
+            markPoint: {
+              data: [
+                { type: 'max', name: 'Max' },
+                { type: 'min', name: 'Min' }
+              ]
             },
-            emphasis: {
-              itemStyle: {
-                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                  { offset: 0, color: '#2378f7' },
-                  { offset: 0.7, color: '#2378f7' },
-                  { offset: 1, color: '#83bff6' }
-                ])
-              }
+            markLine: {
+              data: [{ type: 'average', name: 'Avg' }]
+            }
+          },
+          {
+            name: '最高温',
+            type: 'bar',
+            data: this.maxtemperature,
+            markPoint: {
+              data: [
+                { type: 'max', name: 'Max' },
+                { type: 'min', name: 'Min' }
+              ]
             },
-            data: data
+            markLine: {
+              data: [{ type: 'average', name: 'Avg' }]
+            }
           }
         ]
       };
       this.histcharts .setOption(histoption)
     }
   },
+  watch:{
+    year(newValue) {
+      this.getAQIdate();
+    },
+    date(newValue) {
+      this.getComponentdate();
+    }
+  }
 };
 </script>
 
@@ -709,7 +875,7 @@ body {
   margin: 0 !important;
 }
 .lineChart {
-  background-color: #061235;
+  background-color: #061235c7;
   width: 100%;
   height: 220px;
   border: 0.1px solid #000;
@@ -717,7 +883,7 @@ body {
   border-radius: 20px;
 }
 .mapStyle {
-  background-color: #061235;
+  background-color: #061235c7;
   width: 30%;
   height: 450px;
   margin-top: 10px;
@@ -731,6 +897,7 @@ body {
 }
 
 .circle {
+  white-space: pre-wrap;
   position: relative;
   width: 100px;
   height: 100px;
@@ -739,21 +906,20 @@ body {
 }
 .circle::before,
 .circle::after {
-  content: "";
   position: absolute;
   border-radius: 50%;
 }
 
 .circle::before {
+  content: "";
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   background: var(--before-bg-color);
-  animation: spin 30s linear infinite ;
 }
 .circle::after {
-  content: "123";
+  content: '';
   display: flex;
   justify-content: center;
   align-items: center;
@@ -775,7 +941,7 @@ body {
   }
 }
 .proportionChart{
-  background-color: #061235;
+  background-color: #061235c7;
   width: 31.6%;
   height: 450px;
   margin-top: 10px;
