@@ -1,5 +1,6 @@
 <template>
   <div>
+    <div class="bg-container"/>
     <router-view></router-view>
   </div>
 </template>
@@ -34,4 +35,13 @@ export default {
 };
 </script>
 <style>
+
+.bg-container {
+  position:fixed; 
+  width: 100%; 
+  height: 100%; 
+  background-color: black; 
+  background: url("./assets/bg.png");
+  z-index: -10;
+}
 </style>
